@@ -1,0 +1,19 @@
+.venv
+.env
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual Environments
+venv/
+env/
+
+# IDE settings
+.vscode/
+.idea/
+
+# Streamlit
+.streamlit/
