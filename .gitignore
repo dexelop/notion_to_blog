@@ -17,3 +17,6 @@ env/
 
 # Streamlit
 .streamlit/
+
+# Sync state
+.sync_state.json

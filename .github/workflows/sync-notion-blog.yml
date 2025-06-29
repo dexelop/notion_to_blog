@@ -1,0 +1,112 @@
+name: Notion Blog 자동 동기화
+
+on:
+  # 6시간마다 자동 실행 (UTC 기준: 00:00, 06:00, 12:00, 18:00)
+  schedule:
+    - cron: '0 */6 * * *'
+  
+  # 수동 트리거 가능
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run (테스트 모드)'
+        required: false
+        default: 'false'
+        type: boolean
+
+jobs:
+  sync-notion:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📂 체크아웃
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        fetch-depth: 0
+
+    - name: 🐍 Python 설정
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: 📦 uv 설치
+      uses: astral-sh/setup-uv@v3
+      with:
+        enable-cache: true
+
+    - name: 📥 의존성 설치
+      run: uv pip install --system -r requirements.txt
+
+    - name: 🔍 환경 변수 확인
+      run: |
+        echo "NOTION_TOKEN 설정 여부: ${{ secrets.NOTION_TOKEN != '' }}"
+        echo "NOTION_DATABASE_ID 설정 여부: ${{ secrets.NOTION_DATABASE_ID != '' }}"
+        echo "현재 시간 (UTC): $(date -u)"
+      env:
+        NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+        NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
+
+    - name: 🔄 Notion 동기화 실행
+      run: |
+        if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+          echo "🧪 Dry run 모드로 실행"
+          python sync_notion.py --dry-run
+        else
+          echo "🚀 실제 동기화 실행"
+          python sync_notion.py
+        fi
+      env:
+        NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+        NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: 📤 변경사항 푸시 (if any)
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        
+        if [ -n "$(git status --porcelain)" ]; then
+          echo "📝 변경사항 발견, 커밋 중..."
+          git add -A
+          git commit -m "auto: Notion 블로그 자동 동기화 $(date -u +'%Y-%m-%d %H:%M:%S') UTC
+
+🤖 Generated with GitHub Actions
+Co-Authored-By: GitHub Actions <action@github.com>"
+          git push
+          echo "✅ 변경사항 푸시 완료"
+        else
+          echo "📝 변경사항 없음"
+        fi
+
+  deploy-to-fly:
+    needs: sync-notion
+    runs-on: ubuntu-latest
+    if: github.event.inputs.dry_run != 'true'
+    
+    steps:
+    - name: 📂 체크아웃 (최신)
+      uses: actions/checkout@v4
+      with:
+        ref: main
+        fetch-depth: 0
+
+    - name: 🚁 fly.io 설정
+      uses: superfly/flyctl-actions/setup-flyctl@master
+
+    - name: 🚀 fly.io 배포
+      run: flyctl deploy --remote-only
+      env:
+        FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+    - name: 🎉 배포 완료 알림
+      if: success()
+      run: |
+        echo "✅ fly.io 배포 성공!"
+        echo "🌐 사이트 URL: https://your-app-name.fly.dev"
+      
+    - name: ❌ 배포 실패 알림  
+      if: failure()
+      run: |
+        echo "❌ fly.io 배포 실패"
+        echo "🔧 수동 확인이 필요합니다"

@@ -3,6 +3,7 @@
 Notion-Streamlit 블로그 시스템의 홈페이지
 """
 import streamlit as st
+from datetime import datetime
 from notion_client import NotionClient
 
 
@@ -82,5 +83,13 @@ def main():
         """)
 
 
-if __name__ == "__main__":
+def healthcheck():
+    """fly.io 헬스체크용 엔드포인트"""
+    return {"status": "healthy", "timestamp": datetime.now().isoformat()}
+
+
+# URL 라우팅
+if "healthz" in st.query_params:
+    st.json(healthcheck())
+elif __name__ == "__main__":
     main()
